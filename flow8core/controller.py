@@ -44,9 +44,32 @@ class Flow8Controller:
         n = self._resolve_snapshot(which)
         msg = program_change(M.GLOBAL_CH, n)
         self.state.data["last_snapshot"] = n
+        restored = self.state.restore_snapshot(n)   # 기억해 둔 값이 있으면 섀도를 그 스냅샷 내용으로
         name = self.aliases.snapshot_name(n)
         label = f"{n}번" + (f"({name})" if name else "")
-        return self._commit([msg], f"스냅샷 {label} 불러옴")
+        return self._commit([msg], f"스냅샷 {label} 불러옴" + ("" if restored else " (기억된 값 없음)"))
+
+    def record_snapshot(self, which: int | str) -> str:
+        """지금 섀도 값을 스냅샷 번호의 내용으로 기억한다(믹서로 보내는 건 없음). 본체에 저장한 직후 호출."""
+        n = self._resolve_snapshot(which)
+        self.state.record_snapshot(n)
+        self.state.save()
+        return f"스냅샷 {n}번 내용 기억함 (채널 {len(self.state.data.get('channels', {}))}개)"
+
+    # ── 상대 조절 ──
+    def get_value(self, channel: str | int, field: str) -> int | None:
+        ch = self._channel(channel)
+        v = self.state.get_channel(ch.idx, field)
+        return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+    def nudge(self, channel: str | int, field: str, delta: int) -> int:
+        """채널 숫자 항목을 delta만큼 올리거나 내린다(0~127 고정). 기록이 없으면 0에서 시작. 새 값을 돌려준다."""
+        if field in ("mute", "solo") or field not in M.CHANNEL_CC:
+            raise Flow8Error(f"상대 조절이 되는 항목이 아니에요: {field}")
+        cur = self.get_value(channel, field)
+        new = max(0, min(127, (cur if cur is not None else 0) + int(delta)))
+        self.set_channel(channel, **{field: new})
+        return new
 
     def _resolve_snapshot(self, which: int | str) -> int:
         if isinstance(which, str) and not which.strip().isdigit():

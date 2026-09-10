@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -38,7 +39,31 @@ class ShadowState:
         self.data: dict[str, Any] = _load(STATE_PATH, {
             "last_snapshot": None, "channels": {}, "buses": {}, "fx": {},
             "updated_at": None, "history": [],
+            "snapshots": {},   # 본체 스냅샷 번호별로 기억해 둔 채널·버스·FX 값 — 불러올 때 섀도에 복원
         })
+
+    def get_channel(self, idx: int, field: str) -> Any:
+        return self.data.get("channels", {}).get(str(idx), {}).get(field)
+
+    def snapshot_values(self, n: int) -> dict | None:
+        return self.data.get("snapshots", {}).get(str(n))
+
+    def record_snapshot(self, n: int) -> None:
+        """지금 섀도 값(채널·버스·FX)을 스냅샷 n의 내용으로 기억한다."""
+        self.data.setdefault("snapshots", {})[str(n)] = {
+            "channels": deepcopy(self.data.get("channels", {})),
+            "buses": deepcopy(self.data.get("buses", {})),
+            "fx": deepcopy(self.data.get("fx", {})),
+        }
+
+    def restore_snapshot(self, n: int) -> bool:
+        """스냅샷 n의 기억값이 있으면 섀도로 되돌린다. 없으면 False."""
+        vals = self.snapshot_values(n)
+        if not vals:
+            return False
+        for key in ("channels", "buses", "fx"):
+            self.data[key] = deepcopy(vals.get(key, {}))
+        return True
 
     def note(self, summary: str) -> None:
         self.data["updated_at"] = datetime.now().isoformat(timespec="seconds")

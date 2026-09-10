@@ -3,8 +3,9 @@
 from .controller import Flow8Controller, Flow8Error
 from .mapping import CHANNELS, BUSES, FX_SLOTS, SNAPSHOT_MAX
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 VERSION_HISTORY = [
+    ("0.2.0", "2026-09-10", "스냅샷 내용 기억(record)·불러올 때 섀도 복원, 채널 값 상대 조절(nudge) — 에코 단축키용"),
     ("0.1.0", "2026-09-10", "최초 — 스냅샷·채널·버스·FX·탭템포 MIDI 전송, 섀도 상태·별칭, 포트 점유 안내"),
 ]
 

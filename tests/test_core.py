@@ -128,3 +128,34 @@ def test_state_persists_and_reloads(ctl):
     assert again.state.data["last_snapshot"] == 5
     assert again.state.data["channels"]["0"]["level"] == 77
     assert again.status()["마지막_스냅샷"] == "5번"
+
+
+# nudge: 기록 없으면 0에서, 0~127 고정, 뮤트·솔로는 거부, 보낸 바이트는 CC16(send_fx1)
+def test_nudge_relative(ctl):
+    c, s = ctl
+    assert c.nudge("1", "send_fx1", 8) == 8
+    assert c.nudge("1", "send_fx1", 8) == 16
+    assert s.sent[-1] == bytes([0xB0, 16, 16])
+    assert c.nudge("1", "send_fx1", -100) == 0
+    assert c.nudge("1", "level", 200) == 127
+    with pytest.raises(Flow8Error):
+        c.nudge("1", "mute", 1)
+    with pytest.raises(Flow8Error):
+        c.nudge("1", "없음", 1)
+
+
+# record/restore: 스냅샷을 기억해 두면 불러올 때 섀도가 그 값으로 돌아와 nudge 기준이 맞는다
+def test_snapshot_record_and_restore(ctl):
+    c, s = ctl
+    c.set_channel("1", send_fx1=44, level=70)
+    c.record_snapshot(3)
+    c.set_channel("1", send_fx1=10)
+    c.record_snapshot(2)
+    assert "기억된 값 없음" in c.load_snapshot(4)
+    assert "기억된 값 없음" not in c.load_snapshot(3)
+    assert c.get_value("1", "send_fx1") == 44
+    assert c.nudge("1", "send_fx1", 8) == 52
+    c.load_snapshot(2)
+    assert c.get_value("1", "send_fx1") == 10
+    again = Flow8Controller(sink=StubSink())
+    assert again.state.snapshot_values(3)["channels"]["0"]["send_fx1"] == 44

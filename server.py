@@ -50,6 +50,21 @@ def flow8_snapshot_load(snapshot: str) -> str:
 
 
 @mcp.tool()
+def flow8_snapshot_record(snapshot: str) -> str:
+    """지금 이 PC가 마지막으로 보낸 값들을 스냅샷 번호의 내용으로 기억한다(믹서 전송 없음). 본체·앱에서 슬롯에 저장한 직후 호출하면, 이후 그 스냅샷을 불러올 때 상태 요약과 상대 조절(nudge)의 기준값이 맞는다."""
+    return _run(_ctl.record_snapshot, snapshot)
+
+
+@mcp.tool()
+def flow8_nudge(channel: str, field: str, delta: int) -> str:
+    """채널 숫자 항목을 delta만큼 상대 조절(0~127 고정). field: level·gain·send_fx1·send_fx2·send_mon1·send_mon2·eq_*·comp·lowcut·balance. 예: 에코 한 단계 = send_fx1 +8."""
+    def go() -> str:
+        v = _ctl.nudge(channel, field, delta)
+        return f"{channel} {field} → {v} ({round(v * 100 / 127)}%)"
+    return _run(go)
+
+
+@mcp.tool()
 def flow8_reset_factory(confirm: str = "") -> str:
     """믹서 공장초기화(PC16). confirm에 정확히 '초기화'를 넣어야만 실행. 되돌릴 수 없으니 사용자 확인 후에만."""
     return _run(_ctl.reset_factory, confirm)

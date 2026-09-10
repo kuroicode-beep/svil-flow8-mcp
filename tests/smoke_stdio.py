@@ -29,7 +29,7 @@ async def main() -> int:
             print("hotkeys_list_slots →", res.content[0].text[:300])
             expected = {"flow8_status", "flow8_snapshot_load", "flow8_reset_factory", "flow8_mute", "flow8_solo",
                         "flow8_channel", "flow8_bus", "flow8_fx", "flow8_tap_tempo", "flow8_alias_set", "flow8_alias_list",
-                        "hotkeys_apply_slot", "hotkeys_list_slots"}
+                        "hotkeys_apply_slot", "hotkeys_list_slots", "flow8_snapshot_record", "flow8_nudge"}
             missing = expected - set(names)
             print("누락 도구:", missing or "없음")
             return 1 if missing else 0
