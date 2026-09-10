@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flow8core"
+version = "0.1.0"
+description = "Behringer FLOW 8 USB MIDI 제어 코어 (svil-flow8 MCP · audio-hotkeys 공용)"
+requires-python = ">=3.13"
+dependencies = ["python-rtmidi>=1.5"]
+
+[tool.setuptools]
+packages = ["flow8core"]
