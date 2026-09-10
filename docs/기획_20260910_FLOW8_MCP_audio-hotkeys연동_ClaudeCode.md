@@ -78,6 +78,8 @@ audio-hotkeys 트레이 ──import──▶ flow8core (공용 패키지)
   - `flow8_backup_list` — 백업 목록·시각·라벨·파싱 요약(채널 레벨 등)
   - `flow8_backup_restore(name, confirm="복원")` — 파싱값을 **CC로 재전송해 되살린다**(레벨·게인·밸런스·로우컷·컴프·4밴드 EQ·센드·버스 레벨/밸런스/리미터/9밴드 EQ). SysEx 되보내기는 믹서가 받지 않으므로 이 방식만 가능. 복원 불가 항목은 응답에 명시: 48V, FX 뮤트, 스냅샷 이름, 뮤트/솔로 상태(덤프 파싱 범위 확인 후 확정).
   - 복원 후 본체에 다시 저장(Snapshots → Save)하는 것은 본체 조작 — 안내만.
+- **실측 결과(2026-09-10 10:20)**: ① Windows BLE는 CCCD 없음·Write Not Permitted·첫 쓰기 0.25초 뒤 끊김으로 `0x4B` 트리거 불가(bleak·WinRT 모두). ② 폰 FLOW Mix 앱을 ADB로 조작해 믹서에 연결한 뒤 재연결 동기화를 두 번 돌렸지만 USB MIDI IN에 SysEx는 오지 않음(600초 대기) — 앱 동기화는 USB 덤프를 유발하지 않는다. ③ 대신 앱 `SETUP > SNAPSHOT LIBRARY > NEW`로 믹서 현재 상태를 폰에 `backup-20260910-current`(10:15:48)로 저장 — 기존 항목 2026-03-24·03-22·2025-12-31도 그대로 있음. 앱 내부 저장소(targetSdk 35, run-as·adb backup 불가)라 파일은 PC로 못 꺼냄. 메타는 `%LOCALAPPDATA%\svil-flow8ackups60910_1015_phone-library_*.json`. `.syx` 백업은 본체 Snapshots > MIDI Dump 수동 실행이 유일한 경로로 남음(소장님 LED 조작 불가 → 보류).
+- ADB 조작 요령(Fold4 커버 화면): 논리 프레임 2316x904(회전 1). `input tap`은 x>904에서 엉뚱한 곳을 누르므로 반드시 `input -d 0 tap x y`. 좌표는 `uiautomator dump` bounds 그대로. Git Bash에선 `MSYS_NO_PATHCONV=1`.
 - 착수 순서상 **0단계**: 코어의 MIDI IN 수신부만 먼저 만들어 백업 1회를 확보한 뒤 나머지 개발을 진행한다.
 
 ## 6. audio-hotkeys 연동 상세 (v1.7.0, MINOR)
@@ -121,7 +123,7 @@ audio-hotkeys 트레이 ──import──▶ flow8core (공용 패키지)
 
 ## 10. 사용자 확인 필요 (완료 조건과 분리)
 
-- **본체에서 MIDI Dump 실행**(Snapshots 메뉴) — 백업 수신은 이 조작이 있어야 시작된다
+- **본체에서 MIDI Dump 실행**(Snapshots 메뉴) — `.syx` 백업은 이 조작이 있어야 시작된다. 2026-09-10 현재 폰 앱 라이브러리 백업으로 대체해 두었고, 이 항목은 LED 조작이 가능해질 때까지 보류
 - 실제 믹서 반응: 뮤트 켜고 끄기 1회, 스냅샷 1회 (귀·본체 표시로 확인)
 - 각 슬롯에 넣을 FLOW 8 스냅샷 번호(기본 환경·노래방송·헤드셋)
 - 스냅샷 별칭 이름
