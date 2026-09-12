@@ -115,7 +115,9 @@ def read_channel(key: str) -> dict:
         d.update({k: (center[i] if i < len(center) else None) for i, k in enumerate(keys)})
         # 48V 버튼은 checked 속성이 없어 상태를 못 읽는다 — 색으로만 보임(캡처 참고)
         d["phantom48v"] = "확인 불가(캡처 색으로 판단)"
-    d["eq"] = dict(zip(EQ_LABELS, [n["text"] for n in ns if n["id"].startswith("eqValueTextView")]))
+    # eqValueTextView0~3 만 — 같은 접두의 빈 노드가 하나 더 잡혀 100 Hz 값이 비던 결함(2026-09-12 실기기) 회피
+    d["eq"] = {label: next((n["text"] for n in ns if n["id"] == f"eqValueTextView{i}"), None)
+               for i, label in enumerate(EQ_LABELS)}
     for btn in ("muteButton", "soloButton"):
         d[btn.replace("Button", "")] = "표시만(selected 속성 없음)"
     tap(TAP["back"], 2)
