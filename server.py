@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -141,6 +142,32 @@ def flow8_alias_set(kind: str, key: str, name: str) -> str:
 def flow8_alias_list() -> str:
     """등록된 스냅샷·채널 별칭 목록."""
     return json.dumps(_ctl.aliases.data, ensure_ascii=False, indent=1)
+
+
+# ── 폰 앱 경유(ADB) — MIDI로 안 되는 것: 현재 값 읽기, 본체 슬롯에 저장 ──
+def _phone_tool(script: str, *args: str, timeout: int = 420) -> str:
+    import subprocess
+    cmd = [sys.executable, str(HERE / "tools" / script), *args]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+                           env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    except subprocess.TimeoutExpired:
+        return f"실패: {script} 가 {timeout}초 안에 끝나지 않았어요"
+    out = (r.stdout or "").strip()
+    err = (r.stderr or "").strip()
+    return out if r.returncode == 0 else f"실패(exit {r.returncode}): {out}\n{err}".strip()
+
+
+@mcp.tool()
+def flow8_phone_readout() -> str:
+    """폰(USB 디버깅·잠금 해제·블루투스 켜짐)의 FLOW Mix 앱을 ADB로 조작해 믹서 현재 값(채널·FX·버스·라우팅)을 읽어 JSON·캡처로 저장한다. 약 2분."""
+    return _phone_tool("phone_readout.py")
+
+
+@mcp.tool()
+def flow8_phone_save_slot(slot: int, name: str) -> str:
+    """믹서의 지금 상태를 본체 슬롯(1~15)에 저장하고 이름을 붙인다(폰 앱 경유, 약 1분). 저장 뒤 PC 기억값도 갱신. name은 영문·숫자 12자 이내."""
+    return _phone_tool("phone_save_slot.py", str(int(slot)), name)
 
 
 # ── audio-hotkeys 연동 ──

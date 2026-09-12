@@ -28,12 +28,13 @@ py -3.13 -m pip install -e C:\Projects\svil-flow8-mcp   # python-rtmidi, mcp 포
 | `flow8_tap_tempo` | 탭 템포 |
 | `flow8_alias_set` / `flow8_alias_list` | 채널·스냅샷 별칭 |
 | `hotkeys_list_slots` / `hotkeys_apply_slot` | audio-hotkeys 슬롯 조회·적용 |
+| `flow8_phone_readout` / `flow8_phone_save_slot` | 폰 FLOW Mix 앱을 ADB로 조작해 현재 값 읽기 · 본체 슬롯에 저장(MIDI로 안 되는 둘) |
 
 값은 0~127 또는 `"60%"`. 뮤트·솔로는 믹서 규격대로 반전 전송(127=해제).
 
 ## MIDI로 안 되는 것
 
-48V 팬텀, 라우팅, 본체 슬롯에 저장, 현재 값 읽기. 이건 폰 앱(FLOW Mix) 또는 본체 메뉴로만 된다. `tools/phone_readout.py`가 ADB로 폰 앱을 조작해 현재 값을 JSON으로 읽어 온다(Fold4 커버 화면 기준 좌표).
+48V 팬텀, 라우팅, 본체 슬롯에 저장, 현재 값 읽기. 이건 폰 앱(FLOW Mix) 또는 본체 메뉴로만 된다. `tools/phone_readout.py`(현재 값 → JSON·캡처)와 `tools/phone_save_slot.py`(지금 상태를 슬롯 N에 이름 붙여 저장)가 ADB로 폰 앱을 대신 조작한다(Fold4 커버 화면 기준 좌표, 2026-09-12 실기기 검증). FX1 모드는 CC2 ≥64 = VOCAL이며 프리셋 PC를 보내면 INSTRUMENT로 초기화되므로 프리셋 뒤에 다시 보낸다.
 
 ## 상태 파일
 
