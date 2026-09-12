@@ -50,6 +50,33 @@ def tap(xy: tuple[int, int], wait: float = 2.0) -> None:
     time.sleep(wait)
 
 
+def find_xy(rid: str | None = None, text: str | None = None, xml: str | None = None) -> tuple[int, int] | None:
+    """화면 요소를 resource-id 또는 text로 찾아 중심 좌표를 돌려준다. 앱 레이아웃이 바뀌어도 고정 좌표보다 오래 산다."""
+    xml = xml if xml is not None else dump_xml()
+    for n in nodes(xml):
+        if rid and n["id"] != rid:
+            continue
+        if text is not None and n.get("text", "") != text:
+            continue
+        m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", n.get("bounds", ""))
+        if m:
+            x1, y1, x2, y2 = map(int, m.groups())
+            return (x1 + x2) // 2, (y1 + y2) // 2
+    return None
+
+
+def tap_el(rid: str | None = None, text: str | None = None, fallback: tuple[int, int] | None = None,
+           wait: float = 2.0) -> bool:
+    """요소를 찾아 탭한다. 못 찾으면 fallback 좌표(2026-09-10 실측)로. 둘 다 없으면 False."""
+    xy = find_xy(rid, text)
+    if xy is None:
+        xy = fallback
+    if xy is None:
+        return False
+    tap(xy, wait)
+    return True
+
+
 def top_activity() -> str:
     out = adb("shell", "dumpsys", "activity", "activities")
     m = re.search(r"topResumedActivity=ActivityRecord\{\S+ u0 (\S+)", out)
@@ -96,13 +123,21 @@ def connect_app() -> None:
             break
     else:
         sys.exit(f"앱이 믹서에 연결되지 못했어요 (화면: {top_activity() or '없음'}). 블루투스·믹서 전원을 확인해 주세요.")
-    tap(TAP["continue_session"], 4)
+    tap_el(text="CONTINUE SESSION", fallback=TAP["continue_session"], wait=4)
     if top_activity() != "MainActivity":
         sys.exit(f"메인 믹서 화면이 아니에요: {top_activity()}")
 
 
+BUS_TAB_ID = {"FX1": "fx1OutputButton", "FX2": "fx2OutputButton", "MON1": "mon1OutputButton",
+              "MON2": "mon2OutputButton", "MAIN": "mainOutputButton"}
+CHANNEL_LABEL = {"1": "1", "2": "2", "3": "3", "4": "4", "5/6": "5/6", "7/8": "7/8"}
+
+
 def read_channel(key: str) -> dict:
-    tap(TAP["channel"][key], 3)
+    if key == "usb":
+        tap_el(rid="bluetoothUsbImagesLayout", fallback=TAP["channel"]["usb"], wait=3)
+    else:
+        tap_el(rid="busIndexTextView", text=CHANNEL_LABEL[key], fallback=TAP["channel"][key], wait=3)
     xml = dump_xml()
     ns = nodes(xml)
     center = [n["text"] for n in ns if n["id"] == "centerTextView"]
@@ -120,13 +155,13 @@ def read_channel(key: str) -> dict:
                for i, label in enumerate(EQ_LABELS)}
     for btn in ("muteButton", "soloButton"):
         d[btn.replace("Button", "")] = "표시만(selected 속성 없음)"
-    tap(TAP["back"], 2)
+    tap_el(text="BACK", fallback=TAP["back"], wait=2)
     return d
 
 
 def read_bus(name: str) -> dict:
-    tap(TAP["bus_tab"][name], 2)
-    tap(TAP["bus_detail"], 3)
+    tap_el(rid=BUS_TAB_ID[name], fallback=TAP["bus_tab"][name], wait=2)
+    tap_el(rid="outputBusTextView", fallback=TAP["bus_detail"], wait=3)
     xml = dump_xml()
     ns = nodes(xml)
     d: dict = {}
@@ -145,17 +180,17 @@ def read_bus(name: str) -> dict:
         d["eq9"] = dict(zip(BUS_EQ_LABELS, [n["text"] for n in ns if n["id"].startswith("eqValueTextView")]))
     screenshot(f"bus_{name}")
     if top_activity() != "MainActivity":
-        tap(TAP["back"], 2)
+        tap_el(text="BACK", fallback=TAP["back"], wait=2)
         if top_activity() != "MainActivity":
             adb("shell", "input", "keyevent", "KEYCODE_BACK")
             time.sleep(2)
-    tap(TAP["bus_tab"]["MAIN"], 1)
+    tap_el(rid=BUS_TAB_ID["MAIN"], fallback=TAP["bus_tab"]["MAIN"], wait=1)
     return d
 
 
 def read_routing() -> dict:
-    tap(TAP["menu"], 2)
-    tap(TAP["menu_routing"], 3)
+    tap(TAP["menu"], 2)   # 좌상단 톱니 아이콘은 resource-id가 없어 좌표 고정
+    tap_el(rid="menuRoutingLinearLayout", fallback=TAP["menu_routing"], wait=3)
     ns = nodes(dump_xml())
     radios = {n["id"]: n.get("checked") for n in ns if n["id"].endswith("RadioButton")}
     d = {
@@ -166,7 +201,7 @@ def read_routing() -> dict:
         "usb_mode": "RECORDING/STREAMING 은 캡처(노란 버튼)로 판단",
     }
     screenshot("routing")
-    tap(TAP["settings_close"], 1)
+    tap_el(rid="closeButton", fallback=TAP["settings_close"], wait=1)
     return d
 
 

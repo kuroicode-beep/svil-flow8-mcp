@@ -10,7 +10,7 @@ import sys
 import time
 
 sys.stdout.reconfigure(encoding="utf-8")
-from phone_readout import TAP, adb, connect_app, dump_xml, nodes, require_device, tap, top_activity  # noqa: E402
+from phone_readout import TAP, adb, connect_app, dump_xml, nodes, require_device, tap, tap_el, top_activity  # noqa: E402
 
 PKG = "com.musicgroup.xairbt"
 SLOT_XY = {n: (503 + 350 * ((n - 1) % 4) + 160, 188 + 172 * ((n - 1) // 4) + 35) for n in range(1, 16)}
@@ -68,30 +68,31 @@ def main() -> int:
         sys.exit("이름은 영문·숫자·공백 12자 이내(앱 입력이 한글을 못 받아요)")
     require_device()
     connect_app()
-    # 메뉴 → MIXER SNAPSHOTS → EDIT
+    # 메뉴 → MIXER SNAPSHOTS → EDIT (요소 id로 찾고, 없으면 2026-09-10 실측 좌표)
     tap(TAP["menu"], 2)
-    tap((223, 402), 3)
-    tap(EDIT_BTN, 2)
+    tap_el(rid="menuDeviceSnapshotsLinearLayout", fallback=(223, 402), wait=3)
+    tap_el(rid="editButton", fallback=EDIT_BTN, wait=2)
     if "RENAME" not in dump_xml():
         sys.exit("EDIT 모드에 들어가지 못했어요")
+    slot_label = f"{a.slot:02d}"
     # 슬롯 선택 → SAVE → 이름 → 확인
-    tap(SLOT_XY[a.slot], 2)
-    tap(SAVE_BTN, 2)
+    tap_el(rid="indexTextView", text=slot_label, fallback=SLOT_XY[a.slot], wait=2)
+    tap_el(rid="saveButton", fallback=SAVE_BTN, wait=2)
     _type_name(a.name)
     if not _confirm():
         sys.exit("SAVE 대화상자를 찾지 못했어요")
     # 이름이 겹쳐 들어갔으면 RENAME으로 한 번 더 정리
     names = slot_names()
     if names.get(a.slot) != a.name:
-        tap(SLOT_XY[a.slot], 2)
-        tap(RENAME_BTN, 2)
+        tap_el(rid="indexTextView", text=slot_label, fallback=SLOT_XY[a.slot], wait=2)
+        tap_el(rid="renameButton", fallback=RENAME_BTN, wait=2)
         _type_name(a.name)
         _confirm()
         names = slot_names()
     ok = names.get(a.slot) == a.name
     print(f"슬롯 {a.slot}: {names.get(a.slot)!r} {'저장·이름 확인' if ok else '이름 불일치'}")
-    tap(CLOSE_EDIT, 1)
-    tap(TAP["settings_close"], 1)
+    tap(CLOSE_EDIT, 1)   # EDIT 모드 닫기(X)는 id 없음
+    tap_el(rid="closeButton", fallback=TAP["settings_close"], wait=1)
     if not a.keep_app:
         adb("shell", "am", "force-stop", PKG)
     # PC 섀도에 기억 — 이후 이 슬롯을 불러올 때 상태 요약·에코 단축키 기준값이 맞는다
