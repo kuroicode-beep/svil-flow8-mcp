@@ -22,7 +22,21 @@ from flow8core import APP_VERSION, Flow8Controller, Flow8Error  # noqa: E402
 from flow8core.midi import Flow8PortError  # noqa: E402
 
 mcp = FastMCP("svil-flow8")
-_ctl = Flow8Controller()
+
+
+def _ctl() -> Flow8Controller:
+    """도구 호출마다 새로 만든다 — 상태 파일을 그때그때 다시 읽기 위해서다.
+
+    🔴 이 서버는 클로드 코드 세션 내내 떠 있다. 모듈 수준에 컨트롤러를 하나 두면
+    시작할 때 읽은 상태를 세션 끝까지 들고 있게 되고, 그 사이 audio-hotkeys나
+    일회성 스크립트가 적어 둔 내용을 모르는 채로 저장해 **덮어쓴다.** 2026-09-23에
+    실제로 스냅샷 4의 기억값과 그날 이력이 이렇게 사라졌다.
+
+    포트는 보낼 때만 열기 때문에(`Flow8Controller._send_all`) 새로 만드는 비용은
+    작은 JSON 두 개를 읽는 정도다. 저장 쪽 합쳐 쓰기(`ShadowState.save`)와 함께
+    두 겹으로 막는다.
+    """
+    return Flow8Controller()
 
 
 # 컨트롤러 호출을 감싸 사용자 오류·포트 오류를 안내문으로 돌려준다
@@ -38,8 +52,9 @@ def _run(fn, *a, **kw) -> str:
 @mcp.tool()
 def flow8_status() -> str:
     """FLOW 8 상태 요약 — 이 PC에서 마지막으로 보낸 값 기준(믹서는 상태를 돌려주지 않음). 포트 연결 여부 포함."""
-    d = _ctl.status()
-    d["포트"] = _ctl.port_check()
+    c = _ctl()
+    d = c.status()
+    d["포트"] = c.port_check()
     d["코어_버전"] = APP_VERSION
     return json.dumps(d, ensure_ascii=False, indent=1)
 
@@ -47,20 +62,20 @@ def flow8_status() -> str:
 @mcp.tool()
 def flow8_snapshot_load(snapshot: str) -> str:
     """믹서 본체에 저장된 스냅샷을 불러온다. snapshot: 1~15 번호 또는 등록한 별칭. 16번(공장초기화)은 거부."""
-    return _run(_ctl.load_snapshot, snapshot)
+    return _run(_ctl().load_snapshot, snapshot)
 
 
 @mcp.tool()
 def flow8_snapshot_record(snapshot: str) -> str:
     """지금 이 PC가 마지막으로 보낸 값들을 스냅샷 번호의 내용으로 기억한다(믹서 전송 없음). 본체·앱에서 슬롯에 저장한 직후 호출하면, 이후 그 스냅샷을 불러올 때 상태 요약과 상대 조절(nudge)의 기준값이 맞는다."""
-    return _run(_ctl.record_snapshot, snapshot)
+    return _run(_ctl().record_snapshot, snapshot)
 
 
 @mcp.tool()
 def flow8_nudge(channel: str, field: str, delta: int) -> str:
     """채널 숫자 항목을 delta만큼 상대 조절(0~127 고정). field: level·gain·send_fx1·send_fx2·send_mon1·send_mon2·eq_*·comp·lowcut·balance. 예: 에코 한 단계 = send_fx1 +8."""
     def go() -> str:
-        v = _ctl.nudge(channel, field, delta)
+        v = _ctl().nudge(channel, field, delta)
         return f"{channel} {field} → {v} ({round(v * 100 / 127)}%)"
     return _run(go)
 
@@ -68,19 +83,19 @@ def flow8_nudge(channel: str, field: str, delta: int) -> str:
 @mcp.tool()
 def flow8_reset_factory(confirm: str = "") -> str:
     """믹서 공장초기화(PC16). confirm에 정확히 '초기화'를 넣어야만 실행. 되돌릴 수 없으니 사용자 확인 후에만."""
-    return _run(_ctl.reset_factory, confirm)
+    return _run(_ctl().reset_factory, confirm)
 
 
 @mcp.tool()
 def flow8_mute(channel: str, on: bool = True) -> str:
     """입력 채널 뮤트 켜기/끄기. channel: 1·2·3·4·5/6·7/8·usb 또는 별칭."""
-    return _run(_ctl.mute, channel, on)
+    return _run(_ctl().mute, channel, on)
 
 
 @mcp.tool()
 def flow8_solo(channel: str, on: bool = True) -> str:
     """입력 채널 솔로 켜기/끄기."""
-    return _run(_ctl.solo, channel, on)
+    return _run(_ctl().solo, channel, on)
 
 
 @mcp.tool()
@@ -93,7 +108,7 @@ def flow8_channel(
     mute: bool | None = None, solo: bool | None = None,
 ) -> str:
     """입력 채널 여러 값을 한 번에. 값은 0~127 또는 '60%' 형식. USB/BT 채널은 gain·comp·lowcut 없음."""
-    return _run(_ctl.set_channel, channel, level=level, gain=gain, balance=balance, lowcut=lowcut, comp=comp,
+    return _run(_ctl().set_channel, channel, level=level, gain=gain, balance=balance, lowcut=lowcut, comp=comp,
                 eq_low=eq_low, eq_lowmid=eq_lowmid, eq_himid=eq_himid, eq_hi=eq_hi,
                 send_mon1=send_mon1, send_mon2=send_mon2, send_fx1=send_fx1, send_fx2=send_fx2,
                 mute=mute, solo=solo)
@@ -103,25 +118,26 @@ def flow8_channel(
 def flow8_bus(bus: str, level: str | None = None, balance: str | None = None, limiter: str | None = None,
               eq: list[str] | None = None) -> str:
     """버스(main·mon1·mon2·fx1·fx2) 레벨·밸런스·리미터·9밴드 EQ(값 9개 리스트)."""
-    return _run(_ctl.set_bus, bus, eq=eq, level=level, balance=balance, limiter=limiter)
+    return _run(_ctl().set_bus, bus, eq=eq, level=level, balance=balance, limiter=limiter)
 
 
 @mcp.tool()
 def flow8_fx(slot: str, preset: int | None = None, param1: str | None = None, param2: str | None = None) -> str:
     """FX 슬롯(1·2) 프리셋 번호와 파라미터 2개."""
-    return _run(_ctl.set_fx, slot, preset=preset, param1=param1, param2=param2)
+    return _run(_ctl().set_fx, slot, preset=preset, param1=param1, param2=param2)
 
 
 @mcp.tool()
 def flow8_tap_tempo() -> str:
     """탭 템포 1회(딜레이 FX 템포)."""
-    return _run(_ctl.tap_tempo)
+    return _run(_ctl().tap_tempo)
 
 
 @mcp.tool()
 def flow8_alias_set(kind: str, key: str, name: str) -> str:
     """별칭 등록. kind='snapshot'이면 key=1~15 번호, kind='channel'이면 key=1·2·3·4·5/6·7/8·usb."""
     k = kind.strip().lower()
+    c = _ctl()   # 설정과 저장이 같은 인스턴스여야 한다 — 매번 새로 만들면 바꾼 값이 사라진다
     if k == "snapshot":
         try:
             n = int(key)
@@ -129,19 +145,19 @@ def flow8_alias_set(kind: str, key: str, name: str) -> str:
             return "실패: 스냅샷 별칭의 key는 1~15 번호예요"
         if not 1 <= n <= 15:
             return "실패: 스냅샷 번호는 1~15"
-        _ctl.aliases.set_snapshot(n, name)
+        c.aliases.set_snapshot(n, name)
     elif k == "channel":
-        _ctl.aliases.set_channel(key.strip().lower(), name)
+        c.aliases.set_channel(key.strip().lower(), name)
     else:
         return "실패: kind는 snapshot 또는 channel"
-    _ctl.aliases.save()
+    c.aliases.save()
     return f"별칭 등록: {k} {key} = {name}"
 
 
 @mcp.tool()
 def flow8_alias_list() -> str:
     """등록된 스냅샷·채널 별칭 목록."""
-    return json.dumps(_ctl.aliases.data, ensure_ascii=False, indent=1)
+    return json.dumps(_ctl().aliases.data, ensure_ascii=False, indent=1)
 
 
 # ── 폰 앱 경유(ADB) — MIDI로 안 되는 것: 현재 값 읽기, 본체 슬롯에 저장 ──
@@ -215,7 +231,7 @@ def hotkeys_apply_slot(slot: str) -> str:
     out: dict[str, Any] = {"결과": result.summary, "경고": result.warnings}
     f8 = snap.get("flow8_snapshot")
     if f8:
-        out["flow8"] = _run(_ctl.load_snapshot, f8)
+        out["flow8"] = _run(_ctl().load_snapshot, f8)
     return json.dumps(out, ensure_ascii=False, indent=1)
 
 
